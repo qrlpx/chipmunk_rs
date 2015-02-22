@@ -1,0 +1,31 @@
+[package]
+name = "chipmunk"
+version = "0.0.0"
+authors = [""]
+
+[dependencies.chipmunk_sys]
+git = "https://github.com/qrlpx/chipmunk_sys"
+
+[dependencies.nalgebra]
+git = "https://github.com/sebcrozet/nalgebra"
+
+[dev-dependencies.gl]
+git = "https://github.com/bjz/gl-rs"
+
+[dev-dependencies.glutin]
+git = "https://github.com/tomaka/glutin"
+
+[dev-dependencies.shader_version]
+git = "https://github.com/PistonDevelopers/shader_version"
+
+[dev-dependencies.piston2d-opengl_graphics]
+git = "https://github.com/PistonDevelopers/opengl_graphics"
+
+[dev-dependencies.piston2d-graphics]
+git = "https://github.com/PistonDevelopers/graphics"
+
+[dev-dependencies.vecmath]
+git = "https://github.com/PistonDevelopers/vecmath"
+
+[dev-dependencies.clock_ticks]
+git = "https://github.com/tomaka/clock_ticks"
