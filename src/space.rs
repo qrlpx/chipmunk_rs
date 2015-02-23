@@ -480,9 +480,13 @@ impl Drop for LockedSpace {
     /// TODO: ground body!
     fn drop(&mut self){
         unsafe {
-
+            let bodies = self.bodies()
+                .map(|body| body.handle())
+                .collect::<Vec<BodyHandle>>();
+            for handle in bodies {
+                self.remove_body(handle);
+            }
             ffi::cpSpaceDestroy(self.mut_ptr());
-        
         }
     }
 }
