@@ -475,22 +475,6 @@ TODO cpBool cpSpaceShapeQuery(cpSpace *space, cpShape *shape, cpSpaceShapeQueryF
     }
 }
 
-#[unsafe_destructor]
-impl Drop for LockedSpace {
-    /// TODO: ground body!
-    fn drop(&mut self){
-        unsafe {
-            let bodies = self.bodies()
-                .map(|body| body.handle())
-                .collect::<Vec<BodyHandle>>();
-            for handle in bodies {
-                self.remove_body(handle);
-            }
-            ffi::cpSpaceDestroy(self.mut_ptr());
-        }
-    }
-}
-
 pub struct Space(LockedSpace);
 
 impl Deref for Space {
@@ -655,6 +639,22 @@ impl Space {
         unsafe { 
             ffi::cpSpaceSetUserData(self.mut_ptr(), mem::transmute(&mut*self));
             ffi::cpSpaceStep(self.mut_ptr(), dt);
+        }
+    }
+}
+
+#[unsafe_destructor]
+impl Drop for Space {
+    /// TODO: ground body!
+    fn drop(&mut self){
+        unsafe {
+            let bodies = self.bodies()
+                .map(|body| body.handle())
+                .collect::<Vec<BodyHandle>>();
+            for handle in bodies {
+                self.remove_body(handle);
+            }
+            ffi::cpSpaceDestroy(self.mut_ptr());
         }
     }
 }
