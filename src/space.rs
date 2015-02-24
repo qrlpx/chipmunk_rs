@@ -164,6 +164,8 @@ pub struct LockedSpace {
     raw: ffi::cpSpace,
 }
 
+unsafe impl Sync for LockedSpace {}
+
 impl LockedSpace {
     pub fn ptr(&self) -> *const ffi::cpSpace { &self.raw }
     pub fn mut_ptr(&mut self) -> *mut ffi::cpSpace { self.ptr() as *mut _ }
