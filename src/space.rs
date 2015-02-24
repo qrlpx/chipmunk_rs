@@ -63,7 +63,7 @@ impl PostStepCallbacks {
     }
 }
 
-pub trait CollisionHandler: 'static {
+pub trait CollisionHandler: Sync + 'static {
     fn begin<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool {
         unsafe {
             let (arb, space) = (args.mut_arbiter().mut_ptr(), args.mut_space().mut_ptr());
