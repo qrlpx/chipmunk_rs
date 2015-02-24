@@ -92,6 +92,8 @@ pub type ShapeHandle = ObjectHandle<ffi::cpShape>;
 
 pub struct ShapeBase(ffi::cpShape);
 
+unsafe impl Sync for ShapeBase {}
+
 impl ShapeBase {
     pub unsafe fn from_ptr(ptr: *const ffi::cpShape) -> &'static ShapeBase {
         mem::transmute(ptr)
@@ -290,6 +292,7 @@ impl Drop for ShapeBase {
 
 macro_rules! impl_shape {
     ($ty:ty) => (
+        unsafe impl Sync for $ty {}
         impl Deref for $ty {
             type Target = ShapeBase;
             fn deref(&self) -> &ShapeBase { 

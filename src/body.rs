@@ -35,6 +35,8 @@ pub type BodyHandle = ObjectHandle<ffi::cpBody>;
 
 pub struct BodyBase(ffi::cpBody);
 
+unsafe impl Sync for BodyBase {}
+
 impl BodyBase {
     pub unsafe fn from_ptr(ptr: *const ffi::cpBody) -> &'static BodyBase {
         mem::transmute(ptr)
@@ -230,6 +232,7 @@ impl Drop for BodyBase {
 
 macro_rules! impl_body {
     ($ty:ty) => (
+        unsafe impl Sync for $ty {}
         impl Deref for $ty {
             type Target = BodyBase;
             fn deref(&self) -> &BodyBase { 

@@ -52,6 +52,8 @@ pub type ConstraintHandle = ObjectHandle<ffi::cpConstraint>;
 
 pub struct ConstraintBase(ffi::cpConstraint);
 
+unsafe impl Sync for ConstraintBase {}
+
 impl ConstraintBase {
     pub unsafe fn from_ptr(ptr: *const ffi::cpConstraint) -> &'static ConstraintBase {
         mem::transmute(ptr)
@@ -213,6 +215,7 @@ impl Drop for ConstraintBase {
 
 macro_rules! impl_constraint {
     ($ty:ty) => (
+        unsafe impl Sync for $ty {}
         impl Deref for $ty {
             type Target = ConstraintBase;
             fn deref(&self) -> &ConstraintBase { 
