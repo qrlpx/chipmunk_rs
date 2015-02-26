@@ -213,7 +213,7 @@ impl Drop for ConstraintBase {
 macro_rules! impl_constraint {
     ($ty:ty) => (
         impl $ty {
-            fn downcast(_self: Box<Self>) -> Box<ConstraintBase> {
+            pub fn downcast(_self: Box<Self>) -> Box<ConstraintBase> {
                 unsafe { mem::transmute(_self) }
             }
         }

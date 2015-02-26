@@ -230,7 +230,7 @@ impl Drop for BodyBase {
 macro_rules! impl_body {
     ($ty:ty) => (
         impl $ty {
-            fn downcast(_self: Box<Self>) -> Box<BodyBase> {
+            pub fn downcast(_self: Box<Self>) -> Box<BodyBase> {
                 unsafe { mem::transmute(_self) }
             }
         }
