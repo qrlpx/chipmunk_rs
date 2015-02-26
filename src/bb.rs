@@ -8,7 +8,10 @@ use std::num::Float;
 /// Chipmunk's axis-aligned 2D bounding box type. (left, bottom, right, top)
 #[derive(Copy)]
 pub struct BB {
-    l: Scalar, b: Scalar, r: Scalar, t: Scalar
+    pub l: Scalar,
+    pub b: Scalar,
+    pub r: Scalar,
+    pub t: Scalar
 }
 
 impl BB {
