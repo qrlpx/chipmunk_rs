@@ -212,6 +212,11 @@ impl Drop for ConstraintBase {
 
 macro_rules! impl_constraint {
     ($ty:ty) => (
+        impl $ty {
+            fn downcast(_self: Box<Self>) -> Box<BodyBase> {
+                unsafe { mem::transmute(_self) }
+            }
+        }
         unsafe impl Sync for $ty {}
         impl Deref for $ty {
             type Target = ConstraintBase;

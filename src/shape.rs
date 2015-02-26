@@ -289,6 +289,11 @@ impl Drop for ShapeBase {
 
 macro_rules! impl_shape {
     ($ty:ty) => (
+        impl $ty {
+            fn downcast(_self: Box<Self>) -> Box<BodyBase> {
+                unsafe { mem::transmute(_self) }
+            }
+        }
         unsafe impl Sync for $ty {}
         impl Deref for $ty {
             type Target = ShapeBase;
