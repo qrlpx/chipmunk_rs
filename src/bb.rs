@@ -33,10 +33,10 @@ impl BB {
     pub fn width(self) -> Scalar { self.r - self.l }
     pub fn height(self) -> Scalar { self.b - self.t }
 
-    pub fn bottom_left(self) -> na::Pnt2 { na::Pnt2::new(self.l, self.b) }
-    pub fn bottom_right(self) -> na::Pnt2 { na::Pnt2::new(self.r, self.b) }
-    pub fn top_right(self) -> na::Pnt2 { na::Pnt2::new(self.r, self.t) }
-    pub fn top_left(self) -> na::Pnt2 { na::Pnt2::new(self.l, self.t) }
+    pub fn bottom_left(self) -> Pnt2 { na::Pnt2::new(self.l, self.b) }
+    pub fn bottom_right(self) -> Pnt2 { na::Pnt2::new(self.r, self.b) }
+    pub fn top_right(self) -> Pnt2 { na::Pnt2::new(self.r, self.t) }
+    pub fn top_left(self) -> Pnt2 { na::Pnt2::new(self.l, self.t) }
 
     /// Returns true if @c a and @c b intersect.
     pub fn intersects(self, b: BB) -> bool {
