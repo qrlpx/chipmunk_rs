@@ -290,7 +290,7 @@ impl Drop for ShapeBase {
 macro_rules! impl_shape {
     ($ty:ty) => (
         impl $ty {
-            fn downcast(_self: Box<Self>) -> Box<BodyBase> {
+            fn downcast(_self: Box<Self>) -> Box<ShapeBase> {
                 unsafe { mem::transmute(_self) }
             }
         }
