@@ -585,6 +585,7 @@ impl Space {
             for shape in ret.shapes().collect::<Vec<_>>().iter() {
                 self.remove_shape(shape.handle());
             }
+            unsafe { ffi::cpSpaceRemoveBody(self.mut_ptr(), ret.mut_ptr()); }
             ret
         } else {
             panic!("Space doesn't contain Body!")
@@ -593,6 +594,7 @@ impl Space {
     pub fn remove_constraint(&mut self, handle: ConstraintHandle) -> Box<ConstraintBase> {
         if self.constraints.remove(&handle) {
             let mut ret = unsafe { ConstraintBase::box_from_ptr(handle.unwrap()) };
+            unsafe { ffi::cpSpaceRemoveConstraint(self.mut_ptr(), ret.mut_ptr()); }
             unsafe { ret.set_bodies(None); }
             ret
         } else {
@@ -602,6 +604,7 @@ impl Space {
     pub fn remove_shape(&mut self, handle: ShapeHandle) -> Box<ShapeBase> {
         if self.shapes.remove(&handle) {
             let mut ret = unsafe { ShapeBase::box_from_ptr(handle.unwrap()) };
+            unsafe { ffi::cpSpaceRemoveShape(self.mut_ptr(), ret.mut_ptr()); }
             unsafe { ret.set_body(None); }
             ret
         } else {
