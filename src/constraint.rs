@@ -6,46 +6,43 @@ use ffi;
 use std::ops::{Deref, DerefMut};
 use std::{mem, ptr};
 
-use self::ConstraintUpcast::*;
 pub enum ConstraintUpcast {
-    ToPinJoint(Box<PinJoint>),
-    ToSlideJoint(Box<SlideJoint>),
-    ToPivotJoint(Box<PivotJoint>),
-    ToGrooveJoint(Box<GrooveJoint>),
-    ToDampedSpring(Box<DampedSpring>),
-    ToDampedRotarySpring(Box<DampedRotarySpring>),
-    ToRotaryLimitJoint(Box<RotaryLimitJoint>),
-    ToRatchetJoint(Box<RatchetJoint>),
-    ToGearJoint(Box<GearJoint>),
-    ToSimpleMotor(Box<SimpleMotor>),
+    Pin(Box<PinJoint>),
+    Slide(Box<SlideJoint>),
+    Pivot(Box<PivotJoint>),
+    Groove(Box<GrooveJoint>),
+    DampedSpring(Box<DampedSpring>),
+    DampedRotarySpring(Box<DampedRotarySpring>),
+    RotaryLimit(Box<RotaryLimitJoint>),
+    Ratchet(Box<RatchetJoint>),
+    Gear(Box<GearJoint>),
+    SimpleMotor(Box<SimpleMotor>),
 }
 
-use self::ConstraintUpcastRef::*;
 pub enum ConstraintUpcastRef<'a> {
-    ToPinJointRef(&'a PinJoint),
-    ToSlideJointRef(&'a SlideJoint),
-    ToPivotJointRef(&'a PivotJoint),
-    ToGrooveJointRef(&'a GrooveJoint),
-    ToDampedSpringRef(&'a DampedSpring),
-    ToDampedRotarySpringRef(&'a DampedRotarySpring),
-    ToRotaryLimitJointRef(&'a RotaryLimitJoint),
-    ToRatchetJointRef(&'a RatchetJoint),
-    ToGearJointRef(&'a GearJoint),
-    ToSimpleMotorRef(&'a SimpleMotor),
+    Pin(&'a PinJoint),
+    Slide(&'a SlideJoint),
+    Pivot(&'a PivotJoint),
+    Groove(&'a GrooveJoint),
+    DampedSpring(&'a DampedSpring),
+    DampedRotarySpring(&'a DampedRotarySpring),
+    RotaryLimit(&'a RotaryLimitJoint),
+    Ratchet(&'a RatchetJoint),
+    Gear(&'a GearJoint),
+    SimpleMotor(&'a SimpleMotor),
 }
 
-use self::ConstraintUpcastMut::*;
 pub enum ConstraintUpcastMut<'a> {
-    ToPinJointMut(&'a mut PinJoint),
-    ToSlideJointMut(&'a mut SlideJoint),
-    ToPivotJointMut(&'a mut PivotJoint),
-    ToGrooveJointMut(&'a mut GrooveJoint),
-    ToDampedSpringMut(&'a mut DampedSpring),
-    ToDampedRotarySpringMut(&'a mut DampedRotarySpring),
-    ToRotaryLimitJointMut(&'a mut RotaryLimitJoint),
-    ToRatchetJointMut(&'a mut RatchetJoint),
-    ToGearJointMut(&'a mut GearJoint),
-    ToSimpleMotorMut(&'a mut SimpleMotor),
+    Pin(&'a mut PinJoint),
+    Slide(&'a mut SlideJoint),
+    Pivot(&'a mut PivotJoint),
+    Groove(&'a mut GrooveJoint),
+    DampedSpring(&'a mut DampedSpring),
+    DampedRotarySpring(&'a mut DampedRotarySpring),
+    RotaryLimit(&'a mut RotaryLimitJoint),
+    Ratchet(&'a mut RatchetJoint),
+    Gear(&'a mut GearJoint),
+    SimpleMotor(&'a mut SimpleMotor),
 }
 
 pub type ConstraintHandle = ObjectHandle<ffi::cpConstraint>;
@@ -69,23 +66,23 @@ impl ConstraintBase {
         unsafe {
             let ptr = _self.ptr();
             if ffi::cpConstraintIsPinJoint(ptr) == 1 {
-                ToPinJoint(mem::transmute(_self))
+                ConstraintUpcast::Pin(mem::transmute(_self))
             } else if ffi::cpConstraintIsSlideJoint(ptr) == 1{
-                ToSlideJoint(mem::transmute(_self))
+                ConstraintUpcast::Slide(mem::transmute(_self))
             } else if ffi::cpConstraintIsPivotJoint(ptr) == 1{
-                ToPivotJoint(mem::transmute(_self))
+                ConstraintUpcast::Pivot(mem::transmute(_self))
             } else if ffi::cpConstraintIsGrooveJoint(ptr) == 1 {
-                ToGrooveJoint(mem::transmute(_self))
+                ConstraintUpcast::Groove(mem::transmute(_self))
             } else if ffi::cpConstraintIsDampedSpring(ptr) == 1 {
-                ToDampedSpring(mem::transmute(_self))
+                ConstraintUpcast::DampedSpring(mem::transmute(_self))
             } else if ffi::cpConstraintIsDampedRotarySpring(ptr) == 1 {
-                ToDampedRotarySpring(mem::transmute(_self))
+                ConstraintUpcast::DampedRotarySpring(mem::transmute(_self))
             } else if ffi::cpConstraintIsRatchetJoint(ptr) == 1 {
-                ToRatchetJoint(mem::transmute(_self))
+                ConstraintUpcast::Ratchet(mem::transmute(_self))
             } else if ffi::cpConstraintIsGearJoint(ptr) == 1 {
-                ToGearJoint(mem::transmute(_self))
+                ConstraintUpcast::Gear(mem::transmute(_self))
             } else if ffi::cpConstraintIsSimpleMotor(ptr) == 1 {
-                ToSimpleMotor(mem::transmute(_self))
+                ConstraintUpcast::SimpleMotor(mem::transmute(_self))
             } else {
                 unreachable!()
             }

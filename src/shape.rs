@@ -67,25 +67,22 @@ impl ShapeFilter {
     pub fn all() -> ShapeFilter { SHAPE_FILTER_ALL }
 }
 
-use self::ShapeUpcast::*;
 pub enum ShapeUpcast {
-    ToCircleShape(Box<CircleShape>),
-    ToSegmentShape(Box<SegmentShape>),
-    ToPolyShape(Box<PolyShape>),
+    Circle(Box<CircleShape>),
+    Segment(Box<SegmentShape>),
+    Poly(Box<PolyShape>),
 }
 
-use self::ShapeUpcastRef::*;
 pub enum ShapeUpcastRef<'a> {
-    ToCircleShapeRef(&'a CircleShape),
-    ToSegmentShapeRef(&'a SegmentShape),
-    ToPolyShapeRef(&'a PolyShape),
+    Circle(&'a CircleShape),
+    Segment(&'a SegmentShape),
+    Poly(&'a PolyShape),
 }
 
-use self::ShapeUpcastMut::*;
 pub enum ShapeUpcastMut<'a> {
-    ToCircleShapeMut(&'a mut CircleShape),
-    ToSegmentShapeMut(&'a mut SegmentShape),
-    ToPolyShapeMut(&'a mut PolyShape),
+    Circle(&'a mut CircleShape),
+    Segment(&'a mut SegmentShape),
+    Poly(&'a mut PolyShape),
 }
 
 pub type ShapeHandle = ObjectHandle<ffi::cpShape>;
@@ -108,9 +105,9 @@ impl ShapeBase {
     pub fn upcast(_self: Box<Self>) -> ShapeUpcast {
         unsafe {
             match (*_self.0.klass)._type {
-                ffi::CP_CIRCLE_SHAPE => ToCircleShape(mem::transmute(_self)),
-                ffi::CP_SEGMENT_SHAPE => ToSegmentShape(mem::transmute(_self)),
-                ffi::CP_POLY_SHAPE => ToPolyShape(mem::transmute(_self)),
+                ffi::CP_CIRCLE_SHAPE => ShapeUpcast::Circle(mem::transmute(_self)),
+                ffi::CP_SEGMENT_SHAPE => ShapeUpcast::Segment(mem::transmute(_self)),
+                ffi::CP_POLY_SHAPE => ShapeUpcast::Poly(mem::transmute(_self)),
                 _ => unreachable!()
             }
         }

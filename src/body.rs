@@ -10,25 +10,22 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::{mem};
 
-use self::BodyUpcast::*;
 pub enum BodyUpcast {
-    ToStaticBody(Box<StaticBody>),
-    ToKinematicBody(Box<KinematicBody>),
-    ToDynamicBody(Box<DynamicBody>),
+    Static(Box<StaticBody>),
+    Kinematic(Box<KinematicBody>),
+    Dynamic(Box<DynamicBody>),
 }
 
-use self::BodyUpcastRef::*;
 pub enum BodyUpcastRef<'a> {
-    ToStaticBodyRef(&'a StaticBody),
-    ToKinematicBodyRef(&'a KinematicBody),
-    ToDynamicBodyRef(&'a DynamicBody),
+    Static(&'a StaticBody),
+    Kinematic(&'a KinematicBody),
+    Dynamic(&'a DynamicBody),
 }
 
-use self::BodyUpcastMut::*;
 pub enum BodyUpcastMut<'a> {
-    ToStaticBodyMut(&'a mut StaticBody),
-    ToKinematicBodyMut(&'a mut KinematicBody),
-    ToDynamicBodyMut(&'a mut DynamicBody),
+    Static(&'a mut StaticBody),
+    Kinematic(&'a mut KinematicBody),
+    Dynamic(&'a mut DynamicBody),
 }
 
 pub type BodyHandle = ObjectHandle<ffi::cpBody>;
@@ -51,9 +48,9 @@ impl BodyBase {
     pub fn upcast(_self: Box<Self>) -> BodyUpcast {
         unsafe {
             match ffi::cpBodyGetType(_self.ptr() as *mut _) {
-                ffi::CP_BODY_TYPE_STATIC => ToStaticBody(mem::transmute(_self)),
-                ffi::CP_BODY_TYPE_KINEMATIC => ToKinematicBody(mem::transmute(_self)),
-                ffi::CP_BODY_TYPE_DYNAMIC => ToDynamicBody(mem::transmute(_self)),
+                ffi::CP_BODY_TYPE_STATIC => BodyUpcast::Static(mem::transmute(_self)),
+                ffi::CP_BODY_TYPE_KINEMATIC => BodyUpcast::Kinematic(mem::transmute(_self)),
+                ffi::CP_BODY_TYPE_DYNAMIC => BodyUpcast::Dynamic(mem::transmute(_self)),
                 _ => unreachable!()
             }
         }
