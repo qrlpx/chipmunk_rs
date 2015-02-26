@@ -503,7 +503,7 @@ impl Space {
             shapes: HashSet::new(),
             handlers: HashMap::new(),
             raw: unsafe { 
-                let mut data = mem::uninitialized();
+                let mut data = mem::zeroed();
                 ffi::cpSpaceInit(&mut data);
                 data    
             }
