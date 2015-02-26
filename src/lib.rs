@@ -3,6 +3,7 @@
 #![feature(unsafe_destructor)]
 #![feature(concat_idents)]
 #![feature(box_syntax)]
+#![feature(libc)]
 
 extern crate chipmunk_sys;
 extern crate "nalgebra" as na;
@@ -46,8 +47,8 @@ pub mod constraint;
 pub mod shape;
 pub mod space;
 
-//#[cfg(test)]
-//pub mod test;
+#[cfg(test)]
+pub mod test;
 
 #[allow(raw_pointer_derive)]
 //#[derive(Copy, PartialEq, Eq, Hash)]

@@ -341,13 +341,10 @@ impl<'a> Iterator for Arbiters<'a> {
     type Item = Arbiter<'a>;
     fn next(&mut self) -> Option<Arbiter<'a>> {
         unsafe {
-            let ret = if !self.node.is_null() {
-                let (mut a, mut b) = mem::uninitialized();
-                ffi::cpArbiterGetBodies_NOSWAP(self.node, &mut a, &mut b, 0);
-                Arbiter::from_ptr(self.node, a as *const _ == self.body)
-            } else {
-                return None;
-            };
+            if self.node.is_null() { return None; }
+            let (mut body_a, mut body_b) = mem::uninitialized();
+            ffi::cpArbiterGetBodies_NOSWAP(self.node, &mut body_a, &mut body_b, 0);
+            let ret = Arbiter::from_ptr(self.node, body_a as *const _ == self.body);
             self.node = ffi::cpBodyNextArbiter(self.body as *mut _, self.node as *mut _);
             Some(ret)
         }
@@ -373,12 +370,10 @@ impl<'a> Iterator for Constraints<'a> {
     type Item = &'a ConstraintBase;
     fn next(&mut self) -> Option<&'a ConstraintBase> {
         unsafe {
-            if !self.node.is_null() {
-                self.node = ffi::cpBodyNextConstraint(self.node as *mut _, self.body as *mut _);
-                Some(ConstraintBase::from_ptr(self.node))
-            } else {
-                None
-            }
+            if self.node.is_null() { return None; }
+            let ret = Some(ConstraintBase::from_ptr(self.node));
+            self.node = ffi::cpBodyNextConstraint(self.node as *mut _, self.body as *mut _);
+            ret
         }
     }
 }
@@ -401,12 +396,10 @@ impl<'a> Iterator for Shapes<'a> {
     type Item = &'a ShapeBase;
     fn next(&mut self) -> Option<&'a ShapeBase> {
         unsafe {
-            if !self.node.is_null() {
-                self.node = ffi::cpBodyNextShape(self.node as *mut _);
-                Some(ShapeBase::from_ptr(self.node))
-            } else {
-                None
-            }
+            if self.node.is_null() { return None; }
+            let ret = Some(ShapeBase::from_ptr(self.node));
+            self.node = ffi::cpBodyNextShape(self.node as *mut _);
+            ret
         }
     }
 }
