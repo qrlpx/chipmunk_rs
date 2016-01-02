@@ -1,14 +1,14 @@
 [package]
 name = "chipmunk_physics"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["qrlpx <>"]
 
 build = "build.rs"
 
 [dependencies]
-nalgebra = "*"
-fnv = "*"
-num = "*"
+nalgebra = "^0.4"
+fnv = "^1.0"
+num = "^1.29"
 
 #[dev-dependencies.gl]
 #git = "https://github.com/bjz/gl-rs"
