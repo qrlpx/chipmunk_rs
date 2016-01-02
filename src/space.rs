@@ -1,41 +1,44 @@
 use super::{WILDCARD_COLLISION_TYPE};
-use super::{Scalar, Pnt2, Vec2, CollisionType, ObjectHandle};
+use super::{Scalar, Pnt2, Vec2, CollisionType};
 use bb::BB;
-use arbiter::{ContactPointSet, Arbiter, MutArbiter};
-use body::{BodyHandle, BodyBase};
+use arbiter::{ContactPointSet, Arbiter, ArbiterMut};
+use body::{BodyHandle, Body};
 use shape::{
     PointQueryInfo, SegmentQueryInfo, ShapeFilter, 
-    ShapeHandle, ShapeBase,
+    ShapeHandle, Shape,
 };
-use constraint::{ConstraintHandle, ConstraintBase};
+use constraint::{ConstraintHandle, Constraint};
 use {ffi, na};
 
+use fnv::FnvHasher;
 use libc::{c_int, c_void};
 
-use std::collections::hash_set::{self, HashSet};
-use std::collections::HashMap;
+use std::collections::{hash_set, HashSet};
+use std::collections::hash_state::DefaultState;
 use std::ops::{Deref, DerefMut};
 use std::{mem, ptr, raw};
 
+/*
 /// Well, Chipmunk2D IS a C-lib, and here it shows. To adhere Rusts borrowing-principles, 
 /// while still offering the same kind of flexibility Chipmunk2D does, we need to ensure
 /// that Space and Arbiter are not borrowed mutably at the same time. Between only providing
 /// ObjectHandles in Arbiter or crippling CollisionHandler, I've found this to be the most
 /// intuitive solution.
-pub struct SpaceAndArbiter<'a>(&'a mut LockedSpace, MutArbiter<'a>);
+pub struct SpaceAndArbiter<'a>(&'a mut LockedSpace, ArbiterMut<'a>);
 
 impl<'a> SpaceAndArbiter<'a> {
     pub fn space(&self) -> &LockedSpace { self.0 }
     pub fn arbiter(&self) -> &Arbiter<'a> { &*self.1 }
     pub fn mut_space(&mut self) -> &mut LockedSpace { self.0 }
-    pub fn mut_arbiter(&mut self) -> &mut MutArbiter<'a> { &mut self.1 }
+    pub fn mut_arbiter(&mut self) -> &mut ArbiterMut<'a> { &mut self.1 }
     
-    unsafe fn new(space: *mut ffi::cpSpace, arb: *mut ffi::cpArbiter) 
-        -> SpaceAndArbiter<'static>
+    unsafe fn new(space: *mut ffi::cpSpace, 
+                  arb: *mut ffi::cpArbiter) 
+                  -> SpaceAndArbiter<'static>
     {
         SpaceAndArbiter(
             &mut**Space::from_mut_ptr(space),
-            MutArbiter::from_mut_ptr(arb, (*arb).swapped == 1)
+            ArbiterMut::from_mut_ptr(arb, (*arb).swapped == 1)
         )
     }
 }
@@ -64,47 +67,14 @@ impl PostStepCallbacks {
 }
 
 pub trait CollisionHandler: Sync + 'static {
-    fn begin<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool {
-        unsafe {
-            let (arb, space) = (args.mut_arbiter().mut_ptr(), args.mut_space().mut_ptr());
-            let ret_a = ffi::cpArbiterCallWildcardBeginA(arb, space);
-            let ret_b = ffi::cpArbiterCallWildcardBeginB(arb, space);
-            ret_a == 1 && ret_b == 1
-        }
-    } 
-    fn pre_solve<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool { 
-        unsafe {
-            let (arb, space) = (args.mut_arbiter().mut_ptr(), args.mut_space().mut_ptr());
-            let ret_a = ffi::cpArbiterCallWildcardPreSolveA(arb, space);
-            let ret_b = ffi::cpArbiterCallWildcardPreSolveB(arb, space);
-            ret_a == 1 && ret_b == 1
-        }
-    }
-    fn post_solve<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>){
-        unsafe {
-            let (arb, space) = (args.mut_arbiter().mut_ptr(), args.mut_space().mut_ptr());
-            ffi::cpArbiterCallWildcardPostSolveA(arb, space);
-            ffi::cpArbiterCallWildcardPostSolveB(arb, space);
-        }
-    }
-    fn separate<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>){
-        unsafe {
-            let (arb, space) = (args.mut_arbiter().mut_ptr(), args.mut_space().mut_ptr());
-            ffi::cpArbiterCallWildcardSeparateA(arb, space);
-            ffi::cpArbiterCallWildcardSeparateB(arb, space);
-        }
-    }
-}
-
-pub trait WildcardCollisionHandler: CollisionHandler {}
-
-impl<H: WildcardCollisionHandler> CollisionHandler for H {
     fn begin<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool { true } 
     fn pre_solve<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool { true }
-    fn post_solve<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>){}
-    fn separate<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>){}
+    }
+    fn post_solve<'a>(&'a mut self, mut _args: SpaceAndArbiter<'a>){ /* */ }
+    fn separate<'a>(&'a mut self, mut _args: SpaceAndArbiter<'a>){ /* */ }
 }
-
+*/
+/*
 unsafe fn load_collision_handler<H>(handler: &Box<H>, 
                                     dest: *mut ffi::cpCollisionHandler)
     where H: CollisionHandler 
@@ -154,24 +124,26 @@ unsafe fn load_collision_handler<H>(handler: &Box<H>,
     (*dest).separateFunc = mem::transmute(separate_func::<H>);
 
     (*dest).userData = mem::transmute(&**handler);
-}
+}*/
 
 pub struct LockedSpace {
-    bodies: HashSet<BodyHandle>,
-    constraints: HashSet<ConstraintHandle>,
-    shapes: HashSet<ShapeHandle>,
-    handlers: HashMap<(CollisionType, CollisionType), Box<CollisionHandler>>,
-    raw: ffi::cpSpace,
+    data: ffi::cpSpace,
+    bodies: HashSet<BodyHandle, DefaultState<FnvHasher>>,
+    constraints: HashSet<ConstraintHandle, DefaultState<FnvHasher>>,
+    shapes: HashSet<ShapeHandle, DefaultState<FnvHasher>>,
+    //handlers: HashMap<(CollisionType, CollisionType), Box<CollisionHandler>>,
 }
 
 unsafe impl Sync for LockedSpace {}
 
 impl LockedSpace {
-    pub fn ptr(&self) -> *const ffi::cpSpace { &self.raw }
-    pub fn mut_ptr(&mut self) -> *mut ffi::cpSpace { self.ptr() as *mut _ }
+    #[doc(hidden)]
+    pub fn as_ptr(&self) -> *const ffi::cpSpace { &self.data }
+    #[doc(hidden)]
+    pub fn as_mut_ptr(&mut self) -> *mut ffi::cpSpace { &mut self.data }
 
     pub fn contains_body(&self, body: BodyHandle) -> bool {
-        self.bodies.contains(&body) || body == self.ground_body().handle()
+        self.bodies.contains(&body) //|| body == self.ground_body().handle() TODO
     }
     pub fn contains_constraint(&self, constraint: ConstraintHandle) -> bool {
         self.constraints.contains(&constraint)
@@ -180,44 +152,47 @@ impl LockedSpace {
         self.shapes.contains(&shape)
     }
 
-    pub fn body(&self, body: BodyHandle) -> &BodyBase {
+    pub fn body(&self, body: BodyHandle) -> &Body {
         assert!(self.contains_body(body));
-        unsafe { BodyBase::from_ptr(body.unwrap()) }
+        unsafe { Body::from_ptr(body.as_ptr()) }
     }
-    pub fn mut_body(&mut self, body: BodyHandle) -> &mut BodyBase {
-        unsafe { mem::transmute(self.body(body)) }
+    pub fn body_mut(&mut self, body: BodyHandle) -> &mut Body {
+        assert!(self.contains_body(body));
+        unsafe { Body::from_mut_ptr(body.as_mut_ptr()) }
     }
 
-    pub fn constraint(&self, constraint: ConstraintHandle) -> &ConstraintBase {
+    pub fn constraint(&self, constraint: ConstraintHandle) -> &Constraint {
         assert!(self.contains_constraint(constraint));
-        unsafe { ConstraintBase::from_ptr(constraint.unwrap()) }
+        unsafe { Constraint::from_ptr(constraint.as_ptr()) }
     }
-    pub fn mut_constraint(&mut self, constraint: ConstraintHandle) -> &mut ConstraintBase {
-        unsafe { mem::transmute(self.constraint(constraint)) }
+    pub fn constraint_mut(&mut self, constraint: ConstraintHandle) -> &mut Constraint {
+        assert!(self.contains_constraint(constraint));
+        unsafe { Constraint::from_mut_ptr(constraint.as_mut_ptr()) }
     }
 
-    pub fn shape(&self, shape: ShapeHandle) -> &ShapeBase {
+    pub fn shape(&self, shape: ShapeHandle) -> &Shape {
         assert!(self.contains_shape(shape));
-        unsafe { ShapeBase::from_ptr(shape.unwrap()) }
+        unsafe { Shape::from_ptr(shape.as_ptr()) }
     }
-    pub fn mut_shape(&mut self, shape: ShapeHandle) -> &mut ShapeBase {
-        unsafe { mem::transmute(self.shape(shape)) }
+    pub fn shape_mut(&mut self, shape: ShapeHandle) -> &mut Shape {
+        assert!(self.contains_shape(shape));
+        unsafe { Shape::from_mut_ptr(shape.as_mut_ptr()) }
     }
 
     /// Number of iterations to use in the impulse solver to solve contacts and other constraints.
     pub fn iterations(&self) -> i32 {
-        unsafe { ffi::cpSpaceGetIterations(self.ptr()) }
+        unsafe { ffi::cpSpaceGetIterations(self.as_ptr()) }
     }
     pub fn set_iterations(&mut self, iterations: i32){
-        unsafe { ffi::cpSpaceSetIterations(self.mut_ptr(), iterations as c_int); }
+        unsafe { ffi::cpSpaceSetIterations(self.as_mut_ptr(), iterations as c_int); }
     }
 
     /// Gravity to pass to rigid bodies when integrating velocity.
     pub fn gravity(&self) -> Vec2 {
-        unsafe { ffi::cpSpaceGetGravity(self.ptr()).to_vec() }
+        unsafe { ffi::cpSpaceGetGravity(self.as_ptr()) }
     }
     pub fn set_gravity(&mut self, v: Vec2){
-        unsafe { ffi::cpSpaceSetGravity(self.mut_ptr(), na::orig::<Pnt2>() + v); }
+        unsafe { ffi::cpSpaceSetGravity(self.as_mut_ptr(), v); }
     }
 
     /// Damping rate expressed as the fraction of velocity bodies retain each second.
@@ -227,29 +202,29 @@ impl LockedSpace {
     /// NOTE: This damping value is different than those of cpDampedSpring and 
     /// cpDampedRotarySpring.
     pub fn damping(&self) -> Scalar {
-        unsafe { ffi::cpSpaceGetDamping(self.ptr()) }
+        unsafe { ffi::cpSpaceGetDamping(self.as_ptr()) }
     }
     pub fn set_damping(&mut self, v: Scalar){
-        unsafe { ffi::cpSpaceSetDamping(self.mut_ptr(), v); }
+        unsafe { ffi::cpSpaceSetDamping(self.as_mut_ptr(), v); }
     }
 
     /// Speed threshold for a body to be considered idle.
     /// The default value of 0 means to let the space guess a good threshold based on gravity.
     pub fn idle_speed_threshold(&self) -> Scalar {
-        unsafe { ffi::cpSpaceGetIdleSpeedThreshold(self.ptr()) }
+        unsafe { ffi::cpSpaceGetIdleSpeedThreshold(self.as_ptr()) }
     }
     pub fn set_idle_speed_threshold(&mut self, v: Scalar){
-        unsafe { ffi::cpSpaceSetIdleSpeedThreshold(self.mut_ptr(), v); }
+        unsafe { ffi::cpSpaceSetIdleSpeedThreshold(self.as_mut_ptr(), v); }
     }
     
     /// Time a group of bodies must remain idle in order to fall asleep.
     /// Enabling sleeping also implicitly enables the the contact graph.
     /// The default value of INFINITY disables the sleeping algorithm.
     pub fn sleep_time_treshold(&self) -> Scalar {
-        unsafe { ffi::cpSpaceGetSleepTimeThreshold(self.ptr()) }
+        unsafe { ffi::cpSpaceGetSleepTimeThreshold(self.as_ptr()) }
     }
     pub fn set_sleep_time_treshold(&mut self, v: Scalar){
-        unsafe { ffi::cpSpaceSetSleepTimeThreshold(self.mut_ptr(), v); }
+        unsafe { ffi::cpSpaceSetSleepTimeThreshold(self.as_mut_ptr(), v); }
     }
     
     /// Amount of encouraged penetration between colliding shapes.
@@ -257,10 +232,10 @@ impl LockedSpace {
     /// Defaults to 0.1. If you have poor simulation quality,
     /// increase this number as much as possible without allowing visible amounts of overlap.
     pub fn collision_slop(&self) -> Scalar {
-        unsafe { ffi::cpSpaceGetCollisionSlop(self.ptr()) }
+        unsafe { ffi::cpSpaceGetCollisionSlop(self.as_ptr()) }
     }
     pub fn set_collision_slot(&mut self, v: Scalar){
-        unsafe { ffi::cpSpaceSetCollisionSlop(self.mut_ptr(), v); }
+        unsafe { ffi::cpSpaceSetCollisionSlop(self.as_mut_ptr(), v); }
     }
     
     /// Determines how fast overlapping shapes are pushed apart.
@@ -268,78 +243,90 @@ impl LockedSpace {
     /// Defaults to pow(1.0 - 0.1, 60.0) meaning that Chipmunk fixes 10% of overlap 
     /// each frame at 60Hz.
     pub fn collision_bias(&self) -> Scalar {
-        unsafe { ffi::cpSpaceGetCollisionBias(self.ptr()) }
+        unsafe { ffi::cpSpaceGetCollisionBias(self.as_ptr()) }
     }
     pub fn set_collision_bias(&mut self, v: Scalar){
-        unsafe { ffi::cpSpaceSetCollisionBias(self.mut_ptr(), v); }
+        unsafe { ffi::cpSpaceSetCollisionBias(self.as_mut_ptr(), v); }
     }
     
     /// Number of frames that contact information should persist.
     /// Defaults to 3. There is probably never a reason to change this value.
     pub fn collision_persistence(&self) -> u32 {
-        unsafe { ffi::cpSpaceGetCollisionPersistence(self.ptr()) }
+        unsafe { ffi::cpSpaceGetCollisionPersistence(self.as_ptr()) }
     }
     pub fn set_collision_persistence(&mut self, v: u32){
-        unsafe { ffi::cpSpaceSetCollisionPersistence(self.mut_ptr(), v) }
+        unsafe { ffi::cpSpaceSetCollisionPersistence(self.as_mut_ptr(), v) }
     }
-    
-    /// TODO Userdata leak?
+
+    /* TODO any need for this?
     /// The Space provided static body for a given cpSpace.
     /// This is merely provided for convenience and you are not required to use it.
-    pub fn ground_body(&self) -> &BodyBase {
+    pub fn ground_body(&self) -> &Body {
         unsafe {
-            let ptr = ffi::cpSpaceGetStaticBody(self.ptr() as *mut _);
-            BodyBase::from_ptr(ptr)
+            let ptr = ffi::cpSpaceGetStaticBody(self.as_ptr() as *mut _);
+            Body::from_ptr(ptr)
         }
     }
-    pub fn mut_ground_body(&mut self) -> &mut BodyBase {
+    pub fn mut_ground_body(&mut self) -> &mut Body {
         unsafe { mem::transmute(self.ground_body()) }
     }
+    */
 
     /// Returns the current (or most recent) time step used with the given space.
     /// Useful from callbacks if your time step is not a compile-time global.
     pub fn current_timestep(&self) -> Scalar {
-        unsafe { ffi::cpSpaceGetCurrentTimeStep(self.ptr()) }
+        unsafe { ffi::cpSpaceGetCurrentTimeStep(self.as_ptr()) }
     }
-
 
     /// Query the space at a point and call @c func for each shape found.
     ///
     /// TODO: mut-variant. should this return bool?
-    pub fn point_query<CB>(&self, point: Pnt2, max_dist: Scalar, filter: ShapeFilter, cb: CB)
-        where CB: FnMut(&ShapeBase, PointQueryInfo)
+    pub fn point_query<CB>(&self, 
+                           point: Pnt2,
+                           max_dist: Scalar, 
+                           filter: ShapeFilter, 
+                           cb: &mut CB)
+        where CB: FnMut(&Shape, PointQueryInfo)
     {
-        unsafe extern "C" fn func<CB>(
-            shape: *mut ffi::cpShape, point: Pnt2, dist: Scalar, gradient: Pnt2, 
-            data: *mut c_void)
-            where CB: FnMut(&ShapeBase, PointQueryInfo)
+        extern "C" fn func<CB>(shape: *mut ffi::cpShape, 
+                               point: Vec2,
+                               dist: Scalar, 
+                               gradient: Vec2, 
+                               data: *mut c_void)
+            where CB: FnMut(&Shape, PointQueryInfo)
         {
-            let closure: &mut CB = mem::transmute(data);
-            let info = PointQueryInfo::new(point, dist, gradient.to_vec());
-            closure(ShapeBase::from_ptr(shape), info);
+            unsafe {
+                let closure: &mut CB = mem::transmute(data);
+                let info = PointQueryInfo::new(point.to_pnt(), dist, gradient);
+                closure(Shape::from_ptr(shape), info);
+            }
         }
     
-        unsafe {
+        unsafe { 
             ffi::cpSpacePointQuery_NOLOCK(
-                self.ptr() as *mut _, point, max_dist, filter,
-                mem::transmute(func::<CB>), mem::transmute(&cb)
+                self.as_ptr() as *mut _,
+                point.to_vec(), max_dist, filter, 
+                Some(func::<CB>), cb as *mut CB as *mut c_void
             );
         }
     }
 
     /// Query the space at a point and return the nearest shape found. 
-    pub fn point_query_nearest(&self, point: Pnt2, max_dist: Scalar, filter: ShapeFilter)
-        -> Option<(&ShapeBase, PointQueryInfo)>
+    pub fn point_query_nearest(&self, 
+                               point: Pnt2,
+                               max_dist: Scalar,
+                               filter: ShapeFilter) 
+                               -> Option<(&Shape, PointQueryInfo)> 
     {
         unsafe {
-            let mut info = mem::uninitialized();
+            let mut info = mem::zeroed();
             let shape = ffi::cpSpacePointQueryNearest(
-                self.ptr() as *mut _, point, max_dist, filter, &mut info
+                self.as_ptr() as *mut _, point.to_vec(), max_dist, filter, &mut info
             );
             if !shape.is_null() {
                 Some((
-                    ShapeBase::from_ptr(shape),
-                    PointQueryInfo::new(info.point, info.distance, info.gradient.to_vec())
+                    Shape::from_ptr(shape),
+                    PointQueryInfo::new(info.point.to_pnt(), info.distance, info.gradient)
                 ))
             } else {
                 None
@@ -354,25 +341,30 @@ impl LockedSpace {
     pub fn segment_query<CB>(&self, 
                              start: Pnt2, 
                              end: Pnt2, 
-                             thickness: Scalar,
+                             thickness: Scalar, 
                              filter: ShapeFilter, 
-                             cb: CB)
-        where CB: FnMut(&ShapeBase, SegmentQueryInfo)
+                             cb: &mut CB)
+        where CB: FnMut(&Shape, SegmentQueryInfo)
     {
-        unsafe extern "C" fn func<CB>(
-            shape: *mut ffi::cpShape, point: Pnt2, normal: Pnt2, alpha: Scalar, 
-            data: *mut c_void)
-            where CB: FnMut(&ShapeBase, SegmentQueryInfo)
+        extern "C" fn func<CB>(shape: *mut ffi::cpShape, 
+                                      point: Vec2, 
+                                      normal: Vec2, 
+                                      alpha: Scalar, 
+                                      data: *mut c_void)
+            where CB: FnMut(&Shape, SegmentQueryInfo)
         {
-            let closure: &mut CB = mem::transmute(data);
-            let info = SegmentQueryInfo::new(point, normal.to_vec(), alpha);
-            closure(ShapeBase::from_ptr(shape), info);
+            unsafe {
+                let closure: &mut CB = mem::transmute(data);
+                let info = SegmentQueryInfo::new(point.to_pnt(), normal, alpha);
+                closure(Shape::from_ptr(shape), info);
+            }
         }
 
         unsafe {
             ffi::cpSpaceSegmentQuery_NOLOCK(
-                self.ptr() as *mut _, start, end, thickness, filter,
-                mem::transmute(func::<CB>), mem::transmute(&cb)
+                self.as_ptr() as *mut _, 
+                start.to_vec(), end.to_vec(), thickness, filter, 
+                Some(func::<CB>), cb as *mut CB as *mut c_void
             );
         }
     }
@@ -384,17 +376,19 @@ impl LockedSpace {
                                end: Pnt2, 
                                thickness: Scalar,
                                filter: ShapeFilter)
-        -> Option<(&ShapeBase,  SegmentQueryInfo)> 
+                               -> Option<(&Shape, SegmentQueryInfo)> 
     {
         unsafe {
-            let mut info = mem::uninitialized();
+            let mut info = mem::zeroed();
             let shape = ffi::cpSpaceSegmentQueryFirst(
-                self.ptr() as *mut _, start, end, thickness, filter, &mut info
+                self.as_ptr() as *mut _, 
+                start.to_vec(), end.to_vec(), thickness, filter, 
+                &mut info
             );
             if !shape.is_null() {
                 Some((
-                    ShapeBase::from_ptr(shape),
-                    SegmentQueryInfo::new(info.point, info.normal.to_vec(), info.alpha)
+                    Shape::from_ptr(shape),
+                    SegmentQueryInfo::new(info.point.to_pnt(), info.normal, info.alpha)
                 ))
             } else {
                 None
@@ -407,73 +401,66 @@ impl LockedSpace {
     /// Only the shape's bounding boxes are checked for overlap, not their full shape.
     ///
     /// TODO: mut-variant. should this return bool?
-    pub fn bb_query<CB>(&self, bb: BB, filter: ShapeFilter, cb: CB)
-        where CB: FnMut(&ShapeBase)
+    pub fn bb_query<CB>(&self, bb: BB, filter: ShapeFilter, cb: &mut CB)
+        where CB: FnMut(&Shape)
     {
-        unsafe extern "C" fn func<CB>(shape: *mut ffi::cpShape, data: *mut c_void)
-            where CB: FnMut(&ShapeBase)
+        extern "C" fn func<CB>(shape: *mut ffi::cpShape, data: *mut c_void)
+            where CB: FnMut(&Shape)
         {
-            let closure: &mut CB = mem::transmute(data);
-            closure(ShapeBase::from_ptr(shape));
+            unsafe {
+                let closure: &mut CB = mem::transmute(data);
+                closure(Shape::from_ptr(shape));
+            }
         }
 
         unsafe {
             ffi::cpSpaceBBQuery_NOLOCK(
-                self.ptr() as *mut _, bb, filter,
-                mem::transmute(func::<CB>), mem::transmute(&cb)
+                self.as_ptr() as *mut _, 
+                bb, filter,
+                Some(func::<CB>), cb as *mut CB as *mut c_void
             );
         }
     }
-
 /* 
 /// Shape query callback function type.
 typedef void (*cpSpaceShapeQueryFunc)(cpShape *shape, cpContactPointSet *points, void *data);
 /// Query a space for any shapes overlapping the given shape and call @c func for each shape found.
 TODO cpBool cpSpaceShapeQuery(cpSpace *space, cpShape *shape, cpSpaceShapeQueryFunc func, void *data);
-
 */
+    pub fn shapes(&self) -> Shapes {
+        Shapes{ iter: self.shapes.iter() }
+    }
+    pub fn shapes_mut(&mut self) -> ShapesMut {
+        ShapesMut{ iter: self.shapes.iter() }
+    }
 
     pub fn bodies(&self) -> Bodies {
         Bodies{ iter: self.bodies.iter() }
     }
+    pub fn bodies_mut(&mut self) -> BodiesMut {
+        BodiesMut{ iter: self.bodies.iter() }
+    }
+
     pub fn constraints(&self) -> Constraints {
         Constraints{ iter: self.constraints.iter() }
     }
-    pub fn shapes(&self) -> Shapes {
-        Shapes{ iter: self.shapes.iter() }
-    }
-
-    pub fn mut_bodies(&mut self) -> MutBodies {
-        MutBodies(self.bodies())
-    }
-    pub fn mut_constraints(&mut self) -> MutConstraints {
-        MutConstraints(self.constraints())
-    }
-    pub fn mut_shapes(&mut self) -> MutShapes {
-        MutShapes(self.shapes())
+    pub fn constraint_muts(&mut self) -> ConstraintsMut {
+        ConstraintsMut{ iter: self.constraints.iter() }
     }
 
     /// Update the collision detection info for the static shapes in the space.
     pub fn reindex_static(&mut self){
-        unsafe { ffi::cpSpaceReindexStatic(self.mut_ptr()); }
+        unsafe { ffi::cpSpaceReindexStatic(self.as_mut_ptr()); }
     }
     /// Update the collision detection data for a specific shape in the space.
     pub fn reindex_shape(&mut self, shape: ShapeHandle){
         assert!(self.contains_shape(shape));
-        unsafe { 
-            ffi::cpSpaceReindexShape(
-                self.mut_ptr(), shape.unwrap()
-            ); 
-        }
+        unsafe { ffi::cpSpaceReindexShape(self.as_mut_ptr(), shape.as_mut_ptr()); }
     }
     /// Update the collision detection data for all shapes attached to a body.
     pub fn reindex_shapes_for_body(&mut self, body: BodyHandle){
         assert!(self.contains_body(body));
-        unsafe { 
-            ffi::cpSpaceReindexShapesForBody(
-                self.mut_ptr(), body.unwrap()
-            ); 
-        } 
+        unsafe { ffi::cpSpaceReindexShapesForBody(self.as_mut_ptr(), body.as_mut_ptr()); } 
     }
 }
 
@@ -483,66 +470,68 @@ impl Deref for Space {
     type Target = LockedSpace;
     fn deref<'a>(&'a self) -> &'a LockedSpace { &self.0 }
 }
+
 impl DerefMut for Space {
     fn deref_mut<'a>(&'a mut self) -> &'a mut LockedSpace { &mut self.0 }
 }
 
 impl Space {
-    /// This should only be called from inside a CollisionHandler or PostStepCallback.
+    #[doc(hidden)]
     pub unsafe fn from_ptr(ptr: *const ffi::cpSpace) -> &'static Self {
-        mem::transmute(ffi::cpSpaceGetUserData(ptr))
+        mem::transmute(ptr)
     }
+    #[doc(hidden)]
     pub unsafe fn from_mut_ptr(ptr: *mut ffi::cpSpace) -> &'static mut Self {
-        mem::transmute(Space::from_ptr(ptr))
+        mem::transmute(ptr)
     }
 
     pub fn new() -> Space {
-        Space(LockedSpace {
-            bodies: HashSet::new(),
-            constraints: HashSet::new(),
-            shapes: HashSet::new(),
-            handlers: HashMap::new(),
-            raw: unsafe { 
-                let mut data = mem::zeroed();
-                ffi::cpSpaceInit(&mut data);
-                data    
-            }
-        })
+        unsafe {
+            let mut data = mem::zeroed();
+            ffi::cpSpaceInit(&mut data);
+            Space(LockedSpace {
+                data: data,
+                bodies: Default::default(),
+                constraints: Default::default(),
+                shapes: Default::default(),
+                //handlers: HashMap::new(),
+            })
+        }
     }
 
-    pub fn add_body(&mut self, mut body: Box<BodyBase>) -> BodyHandle {
+    pub fn add_body(&mut self, mut body: Box<Body>) -> BodyHandle {
         let handle = body.handle();
         unsafe {
             mem::forget(body);
             assert!(
-                ffi::cpBodyGetSpace(handle.unwrap()).is_null(), 
+                ffi::cpBodyGetSpace(handle.as_ptr()).is_null(), 
                 "Body is already added to a Space!"
             );
-            ffi::cpSpaceAddBody(self.mut_ptr(), handle.unwrap());
+            ffi::cpSpaceAddBody(self.as_mut_ptr(), handle.as_mut_ptr());
         }
         self.bodies.insert(handle);
         handle
     }
-
-    
-    pub unsafe fn add_constraint(&mut self, mut constraint: Box<ConstraintBase>) 
-        -> ConstraintHandle
+   
+    pub unsafe fn add_constraint(&mut self, 
+                                 mut constraint: Box<Constraint>) 
+                                 -> ConstraintHandle 
     {
         let handle = constraint.handle();
         mem::forget(constraint);
         assert!(
-            ffi::cpConstraintGetSpace(handle.unwrap()).is_null(), 
+            ffi::cpConstraintGetSpace(handle.as_ptr()).is_null(), 
             "Constraint is already added to a Space!"
         );
-        ffi::cpSpaceAddConstraint(self.mut_ptr(), handle.unwrap());
+        ffi::cpSpaceAddConstraint(self.as_mut_ptr(), handle.as_mut_ptr());
         self.constraints.insert(handle);
         handle
     }
+
     pub fn attach_constraint(&mut self, 
                              bodies: (BodyHandle, BodyHandle), 
-                             mut constraint: Box<ConstraintBase>)
-        -> ConstraintHandle
-    {
+                             mut constraint: Box<Constraint>) 
+                             -> ConstraintHandle {
         unsafe {
             assert!(self.contains_body(bodies.0));
             assert!(self.contains_body(bodies.1));
@@ -552,22 +541,19 @@ impl Space {
         }
     }
 
-    pub unsafe fn add_shape(&mut self, mut shape: Box<ShapeBase>) 
-        -> ShapeHandle
-    {
+    pub unsafe fn add_shape(&mut self, mut shape: Box<Shape>) -> ShapeHandle {
         let handle = shape.handle();
         mem::forget(shape);
         assert!(
-            ffi::cpShapeGetSpace(handle.unwrap()).is_null(), 
+            ffi::cpShapeGetSpace(handle.as_ptr()).is_null(), 
             "Shape is already added to a Space!"
         );
-        ffi::cpSpaceAddShape(self.mut_ptr(), handle.unwrap());
+        ffi::cpSpaceAddShape(self.as_mut_ptr(), handle.as_mut_ptr());
         self.shapes.insert(handle);
         handle
     }
-    pub fn attach_shape(&mut self, body: BodyHandle, mut shape: Box<ShapeBase>) 
-        -> ShapeHandle
-    {
+
+    pub fn attach_shape(&mut self, body: BodyHandle, mut shape: Box<Shape>) -> ShapeHandle {
         unsafe {
             assert!(self.contains_body(body));
             assert!(!shape.is_attached(), "Shape is already attached to a Body!");
@@ -576,42 +562,42 @@ impl Space {
         }
     }
 
-   pub fn remove_body(&mut self, handle: BodyHandle) -> Box<BodyBase> {
+   pub fn remove_body(&mut self, handle: BodyHandle) -> Box<Body> {
         if self.bodies.remove(&handle) {
-            let mut ret = unsafe { BodyBase::box_from_ptr(handle.unwrap()) };
-            for constraint in ret.constraints().collect::<Vec<_>>().iter() {
-                self.remove_constraint(constraint.handle());
+            let mut ret = unsafe { Body::from_owned_ptr(handle.as_mut_ptr()) };
+            for constraint in ret.constraints() {
+                self.remove_constraint(constraint);
             }
-            for shape in ret.shapes().collect::<Vec<_>>().iter() {
-                self.remove_shape(shape.handle());
+            for shape in ret.shapes() {
+                self.remove_shape(shape);
             }
-            unsafe { ffi::cpSpaceRemoveBody(self.mut_ptr(), ret.mut_ptr()); }
+            unsafe { ffi::cpSpaceRemoveBody(self.as_mut_ptr(), ret.as_mut_ptr()); }
             ret
         } else {
             panic!("Space doesn't contain Body!")
         }
     }
-    pub fn remove_constraint(&mut self, handle: ConstraintHandle) -> Box<ConstraintBase> {
+    pub fn remove_constraint(&mut self, handle: ConstraintHandle) -> Box<Constraint> {
         if self.constraints.remove(&handle) {
-            let mut ret = unsafe { ConstraintBase::box_from_ptr(handle.unwrap()) };
-            unsafe { ffi::cpSpaceRemoveConstraint(self.mut_ptr(), ret.mut_ptr()); }
+            let mut ret = unsafe { Constraint::from_owned_ptr(handle.as_mut_ptr()) };
+            unsafe { ffi::cpSpaceRemoveConstraint(self.as_mut_ptr(), ret.as_mut_ptr()); }
             unsafe { ret.set_bodies(None); }
             ret
         } else {
             panic!("Space doesn't contain Constraint!")
         }
     }
-    pub fn remove_shape(&mut self, handle: ShapeHandle) -> Box<ShapeBase> {
+    pub fn remove_shape(&mut self, handle: ShapeHandle) -> Box<Shape> {
         if self.shapes.remove(&handle) {
-            let mut ret = unsafe { ShapeBase::box_from_ptr(handle.unwrap()) };
-            unsafe { ffi::cpSpaceRemoveShape(self.mut_ptr(), ret.mut_ptr()); }
+            let mut ret = unsafe { Shape::from_owned_ptr(handle.as_mut_ptr()) };
+            unsafe { ffi::cpSpaceRemoveShape(self.as_mut_ptr(), ret.as_mut_ptr()); }
             unsafe { ret.set_body(None); }
             ret
         } else {
             panic!("Space doesn't contain Shape!")
         }
     }
-
+/*
     pub fn set_collision_handler<H>(&mut self, 
                                     (ty_a, ty_b): (CollisionType, CollisionType), 
                                     handler: Box<H>)                                                
@@ -620,52 +606,48 @@ impl Space {
         assert!(ty_a != WILDCARD_COLLISION_TYPE);
         assert!(ty_b != WILDCARD_COLLISION_TYPE);
         unsafe { load_collision_handler::<H>(
-            &handler, ffi::cpSpaceAddCollisionHandler(self.mut_ptr(), ty_a, ty_b)
+            &handler, ffi::cpSpaceAddCollisionHandler(self.as_mut_ptr(), ty_a, ty_b)
         ); }
         self.handlers.insert((ty_a, ty_b), handler);
     }
+
     pub fn set_wildcard_collision_handler<H>(&mut self, ty: CollisionType, handler: Box<H>)
         where H: WildcardCollisionHandler
     {
         assert!(ty != WILDCARD_COLLISION_TYPE);
         unsafe { load_collision_handler::<H>(
-            &handler, ffi::cpSpaceAddWildcardHandler(self.mut_ptr(), ty)
+            &handler, ffi::cpSpaceAddWildcardHandler(self.as_mut_ptr(), ty)
         ); }
         self.handlers.insert((WILDCARD_COLLISION_TYPE, ty), handler);
     }
 
-    /// Switch the space to use a spatial hash as it's spatial index.
-    pub fn use_spatial_hash(&mut self, dim: Scalar, count: i32){
-        unsafe { ffi::cpSpaceUseSpatialHash(self.mut_ptr(), dim, count); }
-    }
-
+    // Switch the space to use a spatial hash as it's spatial index.
+    //pub fn use_spatial_hash(&mut self, dim: Scalar, count: i32){
+    //    unsafe { ffi::cpSpaceUseSpatialHash(self.as_mut_ptr(), dim, count); }
+    //}
+*/
     /// Step the space forward in time by @c dt.
     pub fn step(&mut self, dt: Scalar){
-        unsafe { 
-            ffi::cpSpaceSetUserData(self.mut_ptr(), mem::transmute(&mut*self));
-            ffi::cpSpaceStep(self.mut_ptr(), dt);
-        }
+        unsafe { ffi::cpSpaceStep(self.as_mut_ptr(), dt); }
     }
 }
 
-#[unsafe_destructor]
 impl Drop for Space {
-    /// TODO: ground body!
     fn drop(&mut self){
         unsafe {
-            let bodies = self.bodies()
-                .map(|body| body.handle())
-                .collect::<Vec<BodyHandle>>();
+            //TODO do we need to do this?
+            let bodies: Vec<BodyHandle> = self.bodies().map(|b| b.handle()).collect();
             for handle in bodies {
                 self.remove_body(handle);
             }
-            ffi::cpSpaceDestroy(self.mut_ptr());
+
+            ffi::cpSpaceDestroy(self.as_mut_ptr());
         }
     }
 }
 
 macro_rules! iterators {
-    ($item:ident, $iter:ident, $mut_iter:ident, $handle:ident) => (
+    ($item:ident, $iter:ident, $iter_mut:ident, $handle:ident) => (
 
         pub struct $iter<'a> {
             iter: hash_set::Iter<'a, $handle>
@@ -673,26 +655,30 @@ macro_rules! iterators {
 
         impl<'a> Iterator for $iter<'a> {
             type Item = &'a $item;
-            fn next(&mut self) -> Option<&'a $item> {
+            fn next(&mut self) -> Option<Self::Item> {
                 self.iter.next().map(|handle|
-                    unsafe { $item::from_ptr(handle.unwrap()) }
+                    unsafe { $item::from_ptr(handle.as_ptr()) }
                 )
             }
         }
 
-        pub struct $mut_iter<'a>($iter<'a>);
+        pub struct $iter_mut<'a> {
+            iter: hash_set::Iter<'a, $handle>
+        }
 
-        impl<'a> Iterator for $mut_iter<'a> {
+        impl<'a> Iterator for $iter_mut<'a> {
             type Item = &'a mut $item;
-            fn next(&mut self) -> Option<&'a mut $item> {
-                unsafe { mem::transmute(self.0.next()) }
+            fn next(&mut self) -> Option<Self::Item> {
+                self.iter.next().map(|handle|
+                    unsafe { $item::from_mut_ptr(handle.as_mut_ptr()) }
+                )
             }
-        }                                    
+        }                                  
                                             
     );
 }
 
-iterators!(BodyBase, Bodies, MutBodies, BodyHandle);
-iterators!(ConstraintBase, Constraints, MutConstraints, ConstraintHandle);
-iterators!(ShapeBase, Shapes, MutShapes, ShapeHandle);
+iterators!(Body, Bodies, BodiesMut, BodyHandle);
+iterators!(Constraint, Constraints, ConstraintsMut, ConstraintHandle);
+iterators!(Shape, Shapes, ShapesMut, ShapeHandle);
 

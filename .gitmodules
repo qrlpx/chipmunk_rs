@@ -1,0 +1,3 @@
+[submodule "Chipmunk2D"]
+	path = Chipmunk2D
+	url = http://github.com/qrlpx/Chipmunk2D

@@ -1,14 +1,77 @@
-#![allow(improper_ctypes)] //TODO do something about this?
-#![allow(unstable)]
-#![feature(unsafe_destructor)]
-#![feature(concat_idents)]
 #![feature(box_syntax)]
 #![feature(libc)]
+#![feature(nonzero)]
+#![feature(hashmap_hasher)]
+#![feature(raw)]
 
-extern crate chipmunk_sys;
-extern crate "nalgebra" as na;
+#![allow(unused)]
+
+extern crate nalgebra as na;
+extern crate fnv;
+extern crate num;
 extern crate libc;
+extern crate core;
 
+pub mod ffi;
+mod bb;
+#[macro_use]
+mod object;
+mod shape;
+mod body;
+mod arbiter;
+mod constraint;
+mod space;
+
+// ++++++++++++++++++++ aliases ++++++++++++++++++++
+
+/// Correspondes to cpFloat
+#[cfg(not(use_doubles))]
+pub type Scalar = f32;
+
+/// Correspondes to cpFloat
+#[cfg(use_doubles)]
+pub type Scalar = f64;
+
+/// Correspondes to cpVect
+pub type Pnt2 = na::Pnt2<Scalar>;
+
+/// Correspondes to cpVect
+pub type Vec2 = na::Vec2<Scalar>; 
+
+//TODO remove?
+/// Correspondes to cpMat2x2
+pub type Rot2 = na::Rot2<Scalar>;
+
+//TODO remove?
+/// Correspondes to cpMat2x2
+pub type Mat2 = na::Mat2<Scalar>; 
+
+//TODO remove?
+/// Correspondes to cpTransform
+pub type Iso2 = na::Iso2<Scalar>;
+
+pub type Group = ffi::cpGroup;
+pub const NO_GROUP: Group = 0;
+
+pub type Bitmask = ffi::cpBitmask;
+pub const ALL_CATEGORIES: Bitmask = !0;
+
+pub type CollisionType = ffi::cpCollisionType;
+pub const WILDCARD_COLLISION_TYPE: CollisionType = !0;
+
+// ++++++++++++++++++++ free fns ++++++++++++++++++++
+
+/// Linearly interpolate (or extrapolate) between @c f1 and @c f2 by @c t percent.
+pub fn lerp(f1: Scalar, f2: Scalar, t: Scalar) -> Scalar {
+    f1 * (1.0 - t) + f2 * t
+}
+
+/// Linearly interpolate from @c f1 to @c f2 by no more than @c d.
+pub fn lerpconst(f1: Scalar, f2: Scalar, d: Scalar) -> Scalar {
+    f1 + na::clamp(f2 - f1, -d, d)
+}
+
+/*
 use libc::c_int;
 
 use std::hash;
@@ -46,81 +109,6 @@ pub mod body;
 pub mod constraint;
 pub mod shape;
 pub mod space;
-
-#[cfg(test)]
-pub mod test;
-
-#[allow(raw_pointer_derive)]
-//#[derive(Copy, PartialEq, Eq, Hash)]
-pub struct ObjectHandle<P>(*mut P);
-
-unsafe impl<P> Sync for ObjectHandle<P> {}
-
-impl<P> Copy for ObjectHandle<P> {}
-
-impl<P> PartialEq for ObjectHandle<P> {
-    fn eq(&self, other: &ObjectHandle<P>) -> bool { self.0 == other.0 } 
-}
-impl<P> Eq for ObjectHandle<P> {}
-
-impl<P> hash::Hash for ObjectHandle<P> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H){
-        self.0.hash(state);
-    }
-}
-
-impl<P> ObjectHandle<P> {
-    pub fn wrap(ptr: *mut P) -> Self { ObjectHandle(ptr) }
-    pub fn unwrap(self) -> *mut P { self.0 }
-}
-
-/// Correspondes to cpFloat
-pub type Scalar = f32;
-
-/// Correspondes to cpVect
-pub type Pnt2 = na::Pnt2<Scalar>;
-
-/// Correspondes to cpVect
-pub type Vec2 = na::Vec2<Scalar>; 
-
-pub type Rot2 = na::Rot2<Scalar>;
-
-/// Correspondes to cpMat2x2
-pub type Mat2 = na::Mat2<Scalar>; 
-
-/// Correspondes to cpTransform
-pub type Iso2 = na::Iso2<Scalar>;
-
-pub type Group = ffi::cpGroup;
-pub const NO_GROUP: Group = 0;
-
-pub type BitMask = ffi::cpBitmask;
-pub const ALL_CATEGORIES: BitMask = !0;
-
-pub type CollisionType = ffi::cpCollisionType;
-pub const WILDCARD_COLLISION_TYPE: CollisionType = !0;
-
-pub fn min<T: PartialOrd>(v1: T, v2: T) -> T {
-    if v1 <= v2 { v1 } else { v2 }
-}
-
-pub fn max<T: PartialOrd>(v1: T, v2: T) -> T {
-    if v1 >= v2 { v1 } else { v2 }
-}
-
-pub fn clamp<T: PartialOrd>(x: T, min: T, max: T) -> T {
-    if x < min { min } else if x > max { max } else { x }
-}
-
-/// Linearly interpolate (or extrapolate) between @c f1 and @c f2 by @c t percent.
-pub fn lerp(f1: Scalar, f2: Scalar, t: Scalar) -> Scalar {
-    f1 * (1.0 - t) + f2 * t
-}
-
-/// Linearly interpolate from @c f1 to @c f2 by no more than @c d.
-pub fn lerpconst(f1: Scalar, f2: Scalar, d: Scalar) -> Scalar {
-    f1 + clamp(f2 - f1, -d, d)
-}
 
 /// Calculate the moment of inertia for a circle.
 /// @c r1 and @c r2 are the inner and outer diameters. A solid circle has an inner diameter of 0.
@@ -162,15 +150,15 @@ pub fn area_for_poly(verts: &[Pnt2], radius: Scalar) -> Scalar {
 
 /// Calculate the natural centroid of a polygon.
 pub fn centroid_for_poly(verts: &[Pnt2]) -> Pnt2 {
-    unsafe { ffi::cpCentroidForPoly(verts.len() as c_int, verts.as_ptr()) }
+    unsafe { ffi::cpCentroidForPoly(verts.len() as c_int, verts.as_ptr()).to_pnt() }
 }
 
 /// Calculate the moment of inertia for a solid box.
 pub fn moment_for_box(m: Scalar, width: Scalar, height: Scalar) -> Scalar {
     unsafe { ffi::cpMomentForBox(m, width, height) }
 }
-
-/*
+*/
+/* TODO
 /// Calculate the convex hull of a given set of points. Returns the count of points in the hull.
 /// @c result must be a pointer to a @c cpVect array with at least @c count elements.
 /// If @c verts == @c result, then @c verts will be reduced inplace.
@@ -180,4 +168,13 @@ pub fn moment_for_box(m: Scalar, width: Scalar, height: Scalar) -> Scalar {
 /// creates an exact hull.
 int cpConvexHull(int count, const cpVect *verts, cpVect *result, int *first, cpFloat tol);
 */
-
+/* TODO
+/// Returns the closest point on the line segment ab, to the point p.
+static inline cpVect
+cpClosetPointOnSegment(const cpVect p, const cpVect a, const cpVect b)
+{
+	cpVect delta = cpvsub(a, b);
+	cpFloat t = cpfclamp01(cpvdot(delta, cpvsub(p, b))/cpvlengthsq(delta));
+	return cpvadd(b, cpvmult(delta, t));
+}
+*/

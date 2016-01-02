@@ -1,4 +1,5 @@
-/*
+/* NOTE: OUTDATED CODE
+ * TODO: update
 #![feature(box_syntax)]
 
 extern crate gl;
@@ -13,12 +14,10 @@ extern crate clock_ticks;
 extern crate "chipmunk" as cp;
 extern crate "nalgebra" as na;
 
+use graphics::BackEnd;
 use na::Zero;
 
-use graphics::BackEnd;
-
 use std::time::Duration;
-use std::num::Float;
 
 mod math {
     pub use graphics::vecmath::*;
