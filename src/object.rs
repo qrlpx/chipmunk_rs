@@ -46,20 +46,17 @@ macro_rules! cp_object {
         impl $name {
             #[doc(hidden)]
             pub unsafe fn from_ptr(ptr: *const $cp_ty) -> &'static Self {
-                use std::mem;
-                unsafe { mem::transmute(ptr) }
+                ::std::mem::transmute(ptr)
             }
 
             #[doc(hidden)]
             pub unsafe fn from_mut_ptr(ptr: *mut $cp_ty) -> &'static mut Self {
-                use std::mem;
-                unsafe { mem::transmute(ptr) }
+                ::std::mem::transmute(ptr)
             }
 
             #[doc(hidden)]
             pub unsafe fn from_owned_ptr(ptr: *mut $cp_ty) -> Box<Self> {
-                use std::mem;
-                unsafe { mem::transmute(ptr) }
+                ::std::mem::transmute(ptr)
             }
 
             #[doc(hidden)]

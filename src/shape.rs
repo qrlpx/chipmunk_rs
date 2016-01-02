@@ -8,7 +8,6 @@ use ffi;
 use na;
 
 use libc::c_int;
-use std::ops::{Deref, DerefMut};
 use std::{mem, ptr};
 
 // ++++++++++++++++++++ utils ++++++++++++++++++++

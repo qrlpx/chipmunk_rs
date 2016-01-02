@@ -8,7 +8,7 @@ build = "build.rs"
 [dependencies]
 nalgebra = "^0.4"
 fnv = "^1.0"
-num = "^1.29"
+num = "^0.1"
 
 #[dev-dependencies.gl]
 #git = "https://github.com/bjz/gl-rs"

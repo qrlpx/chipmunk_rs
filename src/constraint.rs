@@ -1,9 +1,7 @@
 use ::{Scalar, Pnt2};
-use bb::BB;
-use body::{BodyHandle, Body};
+use body::BodyHandle;
 use ffi;
 
-use std::ops::{Deref, DerefMut};
 use std::{mem, ptr};
 
 cp_object!{ (Constraint, ConstraintHandle, ConstraintDowncast, ConstraintDowncastRef, ConstraintDowncastMut): ffi::cpConstraint {

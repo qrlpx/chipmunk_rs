@@ -1,9 +1,7 @@
 use ::{Scalar, Pnt2, Vec2};
-use shape::{Shape, ShapeHandle};
+use shape::ShapeHandle;
 use body::BodyHandle;
 use ffi;
-
-use na;
 
 use libc::c_int;
 use std::ops::Deref;

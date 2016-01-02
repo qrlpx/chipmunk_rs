@@ -1,13 +1,10 @@
 use ::{Scalar, Pnt2, Vec2, Rot2};
-use arbiter::Arbiter;
+//use arbiter::ArbiterHandle;
 use constraint::ConstraintHandle;
 use shape::ShapeHandle;
 use ffi;
 
-use na;
-
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::{mem};
 
 cp_object!{ (Body, BodyHandle, BodyDowncast, BodyDowncastRef, BodyDowncastMut): ffi::cpBody {

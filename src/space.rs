@@ -19,59 +19,23 @@ use std::ops::{Deref, DerefMut};
 use std::{mem, ptr, raw};
 
 /*
-/// Well, Chipmunk2D IS a C-lib, and here it shows. To adhere Rusts borrowing-principles, 
-/// while still offering the same kind of flexibility Chipmunk2D does, we need to ensure
-/// that Space and Arbiter are not borrowed mutably at the same time. Between only providing
-/// ObjectHandles in Arbiter or crippling CollisionHandler, I've found this to be the most
-/// intuitive solution.
-pub struct SpaceAndArbiter<'a>(&'a mut LockedSpace, ArbiterMut<'a>);
 
-impl<'a> SpaceAndArbiter<'a> {
-    pub fn space(&self) -> &LockedSpace { self.0 }
-    pub fn arbiter(&self) -> &Arbiter<'a> { &*self.1 }
-    pub fn mut_space(&mut self) -> &mut LockedSpace { self.0 }
-    pub fn mut_arbiter(&mut self) -> &mut ArbiterMut<'a> { &mut self.1 }
-    
-    unsafe fn new(space: *mut ffi::cpSpace, 
-                  arb: *mut ffi::cpArbiter) 
-                  -> SpaceAndArbiter<'static>
-    {
-        SpaceAndArbiter(
-            &mut**Space::from_mut_ptr(space),
-            ArbiterMut::from_mut_ptr(arb, (*arb).swapped == 1)
-        )
+pub trait CollisionHandler: 'static {
+    fn begin<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool { 
+        true 
+    } 
+
+    fn pre_solve<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool { 
+        true
+    } 
+
+    fn post_solve<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool { 
+        /* */
     }
-}
 
-pub struct PostStepCallbacks(*mut ffi::cpSpace);
-
-impl PostStepCallbacks {
-    pub fn add<CB>(&mut self, cb: CB)
-        where CB: FnOnce(&mut Space) + 'static
-    {
-        unsafe extern "C" fn func<CB>(space: *mut ffi::cpSpace,
-                                      _: *mut c_void, 
-                                      data: *mut c_void)
-            where CB: FnOnce(&mut Space) + 'static
-        {
-            let mut cb: Box<CB> = mem::transmute(data);
-            cb(Space::from_mut_ptr(space))
-        }
-        unsafe {
-            ffi::cpSpaceAddPostStepCallback_NOKEYS(
-                self.0, mem::transmute(func::<CB>), 
-                ptr::null_mut(), mem::transmute(box cb)
-            );
-        }
+    fn separate<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool {
+        /* */ 
     }
-}
-
-pub trait CollisionHandler: Sync + 'static {
-    fn begin<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool { true } 
-    fn pre_solve<'a>(&'a mut self, mut args: SpaceAndArbiter<'a>) -> bool { true }
-    }
-    fn post_solve<'a>(&'a mut self, mut _args: SpaceAndArbiter<'a>){ /* */ }
-    fn separate<'a>(&'a mut self, mut _args: SpaceAndArbiter<'a>){ /* */ }
 }
 */
 /*

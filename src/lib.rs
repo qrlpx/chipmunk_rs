@@ -4,23 +4,29 @@
 #![feature(hashmap_hasher)]
 #![feature(raw)]
 
-#![allow(unused)]
-
 extern crate nalgebra as na;
 extern crate fnv;
 extern crate num;
 extern crate libc;
 extern crate core;
 
-pub mod ffi;
+#[allow(dead_code)]
+mod ffi;
 mod bb;
 #[macro_use]
 mod object;
 mod shape;
-mod body;
+pub mod body;
 mod arbiter;
 mod constraint;
-mod space;
+pub mod space;
+
+pub use bb::BB;
+pub use shape::*;
+pub use body::{Body, BodyHandle, BodyDowncast, BodyDowncastRef, BodyDowncastMut};
+pub use arbiter::*;
+pub use constraint::*;
+pub use space::{LockedSpace, Space};
 
 // ++++++++++++++++++++ aliases ++++++++++++++++++++
 
@@ -61,6 +67,9 @@ pub const WILDCARD_COLLISION_TYPE: CollisionType = !0;
 
 // ++++++++++++++++++++ free fns ++++++++++++++++++++
 
+use libc::c_int;
+use std::mem;
+
 /// Linearly interpolate (or extrapolate) between @c f1 and @c f2 by @c t percent.
 pub fn lerp(f1: Scalar, f2: Scalar, t: Scalar) -> Scalar {
     f1 * (1.0 - t) + f2 * t
@@ -71,49 +80,10 @@ pub fn lerpconst(f1: Scalar, f2: Scalar, d: Scalar) -> Scalar {
     f1 + na::clamp(f2 - f1, -d, d)
 }
 
-/*
-use libc::c_int;
-
-use std::hash;
-use std::mem;
-
-pub use bb::BB;
-pub use arbiter::{ContactPointSet, Arbiter, MutArbiter};
-
-pub use body::{
-    BodyHandle, BodyBase,
-    BodyUpcast, BodyUpcastRef, BodyUpcastMut,
-    StaticBody, KinematicBody, DynamicBody,
-};
-
-pub use constraint::{
-    ConstraintHandle, ConstraintBase,
-    ConstraintUpcast, ConstraintUpcastRef, ConstraintUpcastMut,
-    PinJoint, SlideJoint, PivotJoint, DampedSpring, DampedRotarySpring,
-    RotaryLimitJoint, RatchetJoint, GearJoint, SimpleMotor,
-};
-
-pub use shape::{
-    PointQueryInfo, SegmentQueryInfo, ShapeFilter,
-    ShapeHandle, ShapeBase,
-    ShapeUpcast, ShapeUpcastRef, ShapeUpcastMut,
-    CircleShape, SegmentShape, PolyShape,
-};
-
-pub use space::Space;
-
-pub mod ffi;
-pub mod bb;
-pub mod arbiter;
-pub mod body;
-pub mod constraint;
-pub mod shape;
-pub mod space;
-
 /// Calculate the moment of inertia for a circle.
 /// @c r1 and @c r2 are the inner and outer diameters. A solid circle has an inner diameter of 0.
 pub fn moment_for_circle(m: Scalar, r1: Scalar, r2: Scalar, offset: Vec2) -> Scalar {
-    unsafe { ffi::cpMomentForCircle(m, r1, r2, na::orig::<Pnt2>() + offset) }
+    unsafe { ffi::cpMomentForCircle(m, r1, r2, offset) }
 }
 
 /// Calculate area of a hollow circle.
@@ -125,39 +95,46 @@ pub fn area_for_circle(r1: Scalar, r2: Scalar) -> Scalar {
 /// Calculate the moment of inertia for a line segment.
 /// Beveling radius is not supported.
 pub fn moment_for_segment(m: Scalar, a: Pnt2, b: Pnt2, thickness: Scalar) -> Scalar {
-    unsafe { ffi::cpMomentForSegment(m, a, b, thickness) }
+    unsafe { ffi::cpMomentForSegment(m, a.to_vec(), b.to_vec(), thickness) }
 }
 
 /// Calculate the area of a fattened (capsule shaped) line segment.
 pub fn area_for_segment(a: Pnt2, b: Pnt2, radius: Scalar) -> Scalar {
-    unsafe { ffi::cpAreaForSegment(a, b, radius) }
+    unsafe { ffi::cpAreaForSegment(a.to_vec(), b.to_vec(), radius) }
 }
 
 /// Calculate the moment of inertia for a solid polygon shape assuming it's center of gravity 
 /// is at it's centroid. The offset is added to each vertex.
 pub fn moment_for_poly(m: Scalar, verts: &[Pnt2], offset: Vec2, radius: Scalar) -> Scalar {
-    unsafe { ffi::cpMomentForPoly(
-        m, verts.len() as c_int, verts.as_ptr(), na::orig::<Pnt2>() + offset, radius
-    )}
+    unsafe { 
+        let verts = mem::transmute::<&[Pnt2], &[Vec2]>(verts);
+        ffi::cpMomentForPoly(m, verts.len() as c_int, verts.as_ptr(), offset, radius)
+    }
 }
 
 /// Calculate the signed area of a polygon. A Clockwise winding gives positive area.
 /// This is probably backwards from what you expect, but matches Chipmunk's the winding for 
 /// poly shapes.
 pub fn area_for_poly(verts: &[Pnt2], radius: Scalar) -> Scalar {
-    unsafe { ffi::cpAreaForPoly(verts.len() as c_int, verts.as_ptr(), radius) }
+    unsafe { 
+        let verts = mem::transmute::<&[Pnt2], &[Vec2]>(verts);
+        ffi::cpAreaForPoly(verts.len() as c_int, verts.as_ptr(), radius) 
+    }
 }
 
 /// Calculate the natural centroid of a polygon.
 pub fn centroid_for_poly(verts: &[Pnt2]) -> Pnt2 {
-    unsafe { ffi::cpCentroidForPoly(verts.len() as c_int, verts.as_ptr()).to_pnt() }
+    unsafe { 
+        let verts = mem::transmute::<&[Pnt2], &[Vec2]>(verts);
+        ffi::cpCentroidForPoly(verts.len() as c_int, verts.as_ptr()).to_pnt() 
+    }
 }
 
 /// Calculate the moment of inertia for a solid box.
 pub fn moment_for_box(m: Scalar, width: Scalar, height: Scalar) -> Scalar {
     unsafe { ffi::cpMomentForBox(m, width, height) }
 }
-*/
+
 /* TODO
 /// Calculate the convex hull of a given set of points. Returns the count of points in the hull.
 /// @c result must be a pointer to a @c cpVect array with at least @c count elements.
