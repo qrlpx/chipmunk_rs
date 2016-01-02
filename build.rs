@@ -19,7 +19,6 @@ fn main() {
         .arg(&format!("-DCMAKE_C_FLAGS={} {}", "-fPIC", "-DCP_USE_DOUBLES=0"));
     run(&mut conf);
 
-
     let mut build = Command::new("make");
     build.current_dir(&src.join("Chipmunk2D"));
     run(&mut build);
@@ -29,7 +28,7 @@ fn main() {
         &dst.join("libchipmunk.a")
     ).unwrap();
 
-    println!("cargo:rustc-flags= -l chipmunk:static -L {}", dst.display());
+    println!("cargo:rustc-flags= -l chipmunk -L {}", dst.display());
 }
 
 fn run(cmd: &mut Command){

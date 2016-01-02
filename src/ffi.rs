@@ -1031,12 +1031,12 @@ pub type cpHashSetIteratorFunc =
 pub type cpHashSetFilterFunc =
     ::std::option::Option<extern "C" fn(elt: *mut ::libc::c_void,
                                         data: *mut ::libc::c_void) -> cpBool>;
-//#[link(name = "chipmunk")]
+#[link(name = "chipmunk")]
 extern "C" {
     pub static mut cpVersionString: *const ::libc::c_char;
     pub static mut cpCollisionHandlerDoNothing: cpCollisionHandler;
 }
-//#[link(name = "chipmunk")]
+#[link(name = "chipmunk")]
 extern "C" {
     pub fn cpMessage(condition: *const ::libc::c_char,
                      file: *const ::libc::c_char, line: ::libc::c_int,
