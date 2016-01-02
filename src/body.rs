@@ -35,6 +35,14 @@ cp_object!{ (Body, BodyHandle, BodyDowncast, BodyDowncastRef, BodyDowncastMut): 
 //void cpBodySleepWithGroup(cpBody *body, cpBody *group);
 
 impl Body {
+    pub fn userdata(&self) -> usize {
+        unsafe { ffi::cpBodyGetUserData(self.as_ptr()) as usize }
+    }
+
+    pub fn set_userdata(&mut self, userdata: usize){
+        unsafe { ffi::cpBodySetUserData(self.as_mut_ptr(), userdata as ffi::cpDataPointer); }
+    }
+
     pub fn position(&self) -> Pnt2 {
         unsafe { ffi::cpBodyGetPosition(self.as_ptr()).to_pnt() }
     }

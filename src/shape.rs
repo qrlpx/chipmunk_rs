@@ -92,6 +92,14 @@ cp_object!{ (Shape, ShapeHandle, ShapeDowncast, ShapeDowncastRef, ShapeDowncastM
 } }
 
 impl Shape {
+    pub fn userdata(&self) -> usize {
+        unsafe { ffi::cpShapeGetUserData(self.as_ptr()) as usize }
+    }
+
+    pub fn set_userdata(&mut self, userdata: usize){
+        unsafe { ffi::cpShapeSetUserData(self.as_mut_ptr(), userdata as ffi::cpDataPointer); }
+    }
+    
     pub unsafe fn set_body(&mut self, body: Option<BodyHandle>){
         ffi::cpShapeSetBody(self.as_mut_ptr(), match body {
             Some(body) => body.as_mut_ptr(),
