@@ -23,7 +23,11 @@ pub mod space;
 
 pub use bb::BB;
 pub use shape::*;
-pub use body::{Body, BodyHandle, BodyDowncast, BodyDowncastRef, BodyDowncastMut};
+pub use body::{
+    Body, BodyHandle, 
+    BodyDowncast, BodyDowncastRef, BodyDowncastMut,
+    StaticBody, KinematicBody, DynamicBody
+};
 pub use arbiter::*;
 pub use constraint::*;
 pub use space::{LockedSpace, Space};
