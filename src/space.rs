@@ -13,94 +13,122 @@ use {ffi, na};
 use fnv::FnvHasher;
 use libc::{c_int, c_void};
 
-use std::collections::{hash_set, HashSet};
+use std::collections::{hash_set, HashSet, HashMap};
 use std::collections::hash_state::DefaultState;
 use std::ops::{Deref, DerefMut};
 use std::{mem, ptr, raw};
 
-/*
+// ++++++++++++++++++++ CollisionHandler ++++++++++++++++++++
 
 pub trait CollisionHandler: 'static {
-    fn begin<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool { 
+    fn begin<'a>(&'a mut self, space: &mut LockedSpace, arbiter: ArbiterMut<'a>) -> bool { 
         true 
     } 
 
-    fn pre_solve<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool { 
+    fn pre_solve<'a>(&'a mut self, space: &mut LockedSpace, arbiter: ArbiterMut<'a>) -> bool { 
         true
     } 
 
-    fn post_solve<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool { 
+    fn post_solve<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>){ 
         /* */
     }
 
-    fn separate<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>) -> bool {
+    fn separate<'a>(&'a mut self, space: &mut LockedSpace, arbiter: Arbiter<'a>){
         /* */ 
     }
 }
-*/
-/*
-unsafe fn load_collision_handler<H>(handler: &Box<H>, 
-                                    dest: *mut ffi::cpCollisionHandler)
+
+unsafe fn load_collision_handler<H>(handler: &mut Box<H>, dest: *mut ffi::cpCollisionHandler)
     where H: CollisionHandler 
 {
-    unsafe extern "C" fn begin_func<H>(arb: *mut ffi::cpArbiter, 
-                                       space: *mut ffi::cpSpace, 
-                                       data: *mut c_void)
+    extern "C" fn begin_func<H>(arb: *mut ffi::cpArbiter, 
+                                space: *mut ffi::cpSpace, 
+                                data: *mut c_void)
         -> ffi::cpBool
         where H: CollisionHandler
     {
-        let handler: &mut H = mem::transmute(data);
-        let ret = handler.begin(SpaceAndArbiter::new(space, arb));
-        if ret { 1 } else { 0 }
+        unsafe {
+            let handler: &mut H = mem::transmute(data);
+            let ret = handler.begin(
+                LockedSpace::from_mut_ptr(space),
+                ArbiterMut::from_mut_ptr(arb, (*arb).swapped == 1)
+            );
+            if ret { 1 } else { 0 }
+        }
     }
-    (*dest).beginFunc = mem::transmute(begin_func::<H>);
+    (*dest).beginFunc = Some(begin_func::<H>);
 
-    unsafe extern "C" fn pre_solve_func<H>(arb: *mut ffi::cpArbiter, 
-                                           space: *mut ffi::cpSpace, 
-                                           data: *mut c_void)
+    extern "C" fn pre_solve_func<H>(arb: *mut ffi::cpArbiter, 
+                                    space: *mut ffi::cpSpace, 
+                                    data: *mut c_void)
         -> ffi::cpBool
         where H: CollisionHandler
     {
-        let handler: &mut H = mem::transmute(data);
-        let ret = handler.pre_solve(SpaceAndArbiter::new(space, arb));
-        if ret { 1 } else { 0 }
+        unsafe {
+            let handler: &mut H = mem::transmute(data);
+            let ret = handler.pre_solve(
+                LockedSpace::from_mut_ptr(space),
+                ArbiterMut::from_mut_ptr(arb, (*arb).swapped == 1)
+            );
+            if ret { 1 } else { 0 }
+        }
     }
-    (*dest).preSolveFunc = mem::transmute(pre_solve_func::<H>);
+    (*dest).preSolveFunc = Some(pre_solve_func::<H>);
 
-    unsafe extern "C" fn post_solve_func<H>(arb: *mut ffi::cpArbiter, 
-                                            space: *mut ffi::cpSpace, 
-                                            data: *mut c_void)
+    extern "C" fn post_solve_func<H>(arb: *mut ffi::cpArbiter, 
+                                     space: *mut ffi::cpSpace, 
+                                     data: *mut c_void)
         where H: CollisionHandler
     {
-        let handler: &mut H = mem::transmute(data);
-        handler.post_solve(SpaceAndArbiter::new(space, arb));
+        unsafe {
+            let handler: &mut H = mem::transmute(data);
+            handler.post_solve(
+                LockedSpace::from_mut_ptr(space),
+                Arbiter::from_ptr(arb, (*arb).swapped == 1)
+            );
+        }
     }
-    (*dest).postSolveFunc = mem::transmute(post_solve_func::<H>);
+    (*dest).postSolveFunc = Some(post_solve_func::<H>);
 
-    unsafe extern "C" fn separate_func<H>(arb: *mut ffi::cpArbiter, 
-                                          space: *mut ffi::cpSpace, 
-                                          data: *mut c_void)
+    extern "C" fn separate_func<H>(arb: *mut ffi::cpArbiter, 
+                                   space: *mut ffi::cpSpace, 
+                                   data: *mut c_void)
         where H: CollisionHandler
     {
-        let handler: &mut H = mem::transmute(data);
-        handler.separate(SpaceAndArbiter::new(space, arb));
+        unsafe {
+            let handler: &mut H = mem::transmute(data);
+            handler.separate(
+                LockedSpace::from_mut_ptr(space),
+                Arbiter::from_ptr(arb, (*arb).swapped == 1)
+            );
+        }
     }
-    (*dest).separateFunc = mem::transmute(separate_func::<H>);
+    (*dest).separateFunc = Some(separate_func::<H>);
 
-    (*dest).userData = mem::transmute(&**handler);
-}*/
+    (*dest).userData = mem::transmute(&mut**handler);
+}
+
+// ++++++++++++++++++++ Space ++++++++++++++++++++
 
 pub struct LockedSpace {
     data: ffi::cpSpace,
     bodies: HashSet<BodyHandle, DefaultState<FnvHasher>>,
     constraints: HashSet<ConstraintHandle, DefaultState<FnvHasher>>,
     shapes: HashSet<ShapeHandle, DefaultState<FnvHasher>>,
-    //handlers: HashMap<(CollisionType, CollisionType), Box<CollisionHandler>>,
+    handlers: HashMap<(CollisionType, CollisionType), Box<CollisionHandler>>,
 }
 
 unsafe impl Sync for LockedSpace {}
 
 impl LockedSpace {
+    #[doc(hidden)]
+    pub unsafe fn from_ptr(ptr: *const ffi::cpSpace) -> &'static Self {
+        mem::transmute(ptr)
+    }
+    #[doc(hidden)]
+    pub unsafe fn from_mut_ptr(ptr: *mut ffi::cpSpace) -> &'static mut Self {
+        mem::transmute(ptr)
+    }
     #[doc(hidden)]
     pub fn as_ptr(&self) -> *const ffi::cpSpace { &self.data }
     #[doc(hidden)]
@@ -439,26 +467,17 @@ impl DerefMut for Space {
     fn deref_mut<'a>(&'a mut self) -> &'a mut LockedSpace { &mut self.0 }
 }
 
-impl Space {
-    #[doc(hidden)]
-    pub unsafe fn from_ptr(ptr: *const ffi::cpSpace) -> &'static Self {
-        mem::transmute(ptr)
-    }
-    #[doc(hidden)]
-    pub unsafe fn from_mut_ptr(ptr: *mut ffi::cpSpace) -> &'static mut Self {
-        mem::transmute(ptr)
-    }
-
+impl Space { 
     pub fn new() -> Space {
         unsafe {
             let mut data = mem::zeroed();
             ffi::cpSpaceInit(&mut data);
             Space(LockedSpace {
                 data: data,
-                bodies: Default::default(),
-                constraints: Default::default(),
-                shapes: Default::default(),
-                //handlers: HashMap::new(),
+                bodies: HashSet::default(),
+                constraints: HashSet::default(),
+                shapes: HashSet::default(),
+                handlers: HashMap::new(),
             })
         }
     }
@@ -561,35 +580,47 @@ impl Space {
             panic!("Space doesn't contain Shape!")
         }
     }
-/*
+
     pub fn set_collision_handler<H>(&mut self, 
                                     (ty_a, ty_b): (CollisionType, CollisionType), 
-                                    handler: Box<H>)                                                
+                                    mut handler: Box<H>)
         where H: CollisionHandler
     {
-        assert!(ty_a != WILDCARD_COLLISION_TYPE);
-        assert!(ty_b != WILDCARD_COLLISION_TYPE);
-        unsafe { load_collision_handler::<H>(
-            &handler, ffi::cpSpaceAddCollisionHandler(self.as_mut_ptr(), ty_a, ty_b)
-        ); }
+        unsafe { 
+            load_collision_handler::<H>(
+                &mut handler, ffi::cpSpaceAddCollisionHandler(self.as_mut_ptr(), ty_a, ty_b)
+            ); 
+        }
         self.handlers.insert((ty_a, ty_b), handler);
     }
 
-    pub fn set_wildcard_collision_handler<H>(&mut self, ty: CollisionType, handler: Box<H>)
-        where H: WildcardCollisionHandler
+    pub fn set_wildcard_collision_handler<H>(&mut self, ty: CollisionType, mut handler: Box<H>)
+        where H: CollisionHandler
     {
-        assert!(ty != WILDCARD_COLLISION_TYPE);
-        unsafe { load_collision_handler::<H>(
-            &handler, ffi::cpSpaceAddWildcardHandler(self.as_mut_ptr(), ty)
-        ); }
+        unsafe { 
+            load_collision_handler::<H>(
+                &mut handler, ffi::cpSpaceAddWildcardHandler(self.as_mut_ptr(), ty)
+            );
+        }
         self.handlers.insert((WILDCARD_COLLISION_TYPE, ty), handler);
     }
-
-    // Switch the space to use a spatial hash as it's spatial index.
-    //pub fn use_spatial_hash(&mut self, dim: Scalar, count: i32){
-    //    unsafe { ffi::cpSpaceUseSpatialHash(self.as_mut_ptr(), dim, count); }
-    //}
+/* TODO
+    pub fn set_default_collision_handler<H>(&mut self, mut handler: Box<H>)
+        where H: CollisionHandler
+    {
+        unsafe { 
+            load_collision_handler::<H>(
+                &mut handler, ffi::cpSpaceAddDefaultHandler(self.as_mut_ptr())
+            );
+        }
+        self.handlers.insert((WILDCARD_COLLISION_TYPE, ty), handler);
+    }
 */
+    /// Switch the space to use a spatial hash as it's spatial index.
+    pub fn use_spatial_hash(&mut self, dim: Scalar, count: i32){
+        unsafe { ffi::cpSpaceUseSpatialHash(self.as_mut_ptr(), dim, count); }
+    }
+
     /// Step the space forward in time by @c dt.
     pub fn step(&mut self, dt: Scalar){
         unsafe { ffi::cpSpaceStep(self.as_mut_ptr(), dt); }
