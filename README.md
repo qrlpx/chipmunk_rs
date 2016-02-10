@@ -1,8 +1,8 @@
 # chipmunk_physics
 
 ### TODO
-* does it compile on Windows, MacOS?
 * examples, tests, docs
+* does it build on Windows, MacOS?
 * use_doubles feature
 * (features for replacing other chipmunk types?)
 * collision handler (old code available, needs update/research)
